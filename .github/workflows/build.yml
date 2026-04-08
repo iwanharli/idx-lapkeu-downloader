@@ -20,7 +20,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
@@ -30,7 +30,7 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --onefile --name "IDX_Downloader" main.py
+          pyinstaller --onefile --clean --name "IDX_Downloader" main.py
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
