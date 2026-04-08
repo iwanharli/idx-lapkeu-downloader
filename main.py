@@ -81,7 +81,7 @@ class IDXDownloader:
                     break
                     
                 index_from += page_size
-                logging.info(f"Sudah terambil {len(all_results)} dari {total} data...")
+                logging.info(f"Progress: {len(all_results)}/{total}")
                 time.sleep(1)
                 
             except Exception as e:
