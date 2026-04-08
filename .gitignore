@@ -1,0 +1,13 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Project specific
+laporan_keuangan/
+downloader.log
+dist/
+build/
+*.spec
+.DS_Store
