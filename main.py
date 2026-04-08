@@ -57,9 +57,10 @@ class IDXDownloader:
         "X-Requested-With": "XMLHttpRequest"
     }
 
-    def __init__(self, save_dir="laporan_keuangan", concurrency_limit=5):
+    def __init__(self, save_dir="laporan_keuangan", concurrency_limit=5, on_progress=None):
         self.save_dir = save_dir
         self.semaphore = asyncio.Semaphore(concurrency_limit)
+        self.on_progress = on_progress
         
         # Load from .env or default
         meta_limit = int(os.getenv("META_CONCURRENCY", 1))
@@ -179,7 +180,10 @@ class IDXDownloader:
         if not self.failed_queue:
             return 0
 
-        logger.warning(f"[RECOVERY] Memulai proses ulang untuk {len(self.failed_queue)} file yang gagal...")
+        msg = f"Memulai proses ulang untuk {len(self.failed_queue)} file yang gagal..."
+        logger.warning(f"[RECOVERY] {msg}")
+        if self.on_progress:
+            await self.on_progress({"type": "status", "message": msg, "mode": "recovery"})
         
         max_rounds = 10
         recovered_count = 0
@@ -260,6 +264,7 @@ class IDXDownloader:
         else:
             res["emiten_status"] = "skipped"
             
+        res["emiten_code"] = emiten_code
         return res
 
     async def run(self, year=2024, emiten_type="s", limit=None, from_json=False):
@@ -294,6 +299,14 @@ class IDXDownloader:
                 logger.warning(f"[WARN] Tidak ada emiten untuk diproses.")
                 return
 
+            if self.on_progress:
+                await self.on_progress({
+                    "type": "start",
+                    "total": len(emiten_to_process),
+                    "year": year,
+                    "asset_type": type_label
+                })
+
             emiten_stats = {"downloaded": 0, "skipped": 0, "failed": 0, "no_data": 0}
             total_file_stats = {"success": 0, "skipped": 0, "failed": 0}
             
@@ -323,8 +336,20 @@ class IDXDownloader:
                 
                 pbar.update(1)
 
+                if self.on_progress:
+                    await self.on_progress({
+                        "type": "progress",
+                        "current": processed_count,
+                        "total": len(emiten_to_process),
+                        "emiten": res.get("emiten_code", "???"), # This needs adjustment
+                        "status": status,
+                        "stats": emiten_stats
+                    })
+
                 if processed_count % self.batch_size == 0 and processed_count < len(emiten_to_process):
                     logger.warning(f"[COOLDOWN] Sudah memproses {processed_count} emiten. Istirahat {self.batch_cooldown} detik...")
+                    if self.on_progress:
+                        await self.on_progress({"type": "status", "message": f"Cooldown {self.batch_cooldown}s...", "mode": "cooldown"})
                     await asyncio.sleep(self.batch_cooldown)
             pbar.close()
 

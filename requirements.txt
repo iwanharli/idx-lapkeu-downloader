@@ -3,3 +3,7 @@ tqdm
 httpx
 aiofiles
 python-dotenv
+fastapi
+uvicorn
+jinja2
+websockets

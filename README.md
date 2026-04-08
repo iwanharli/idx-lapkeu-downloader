@@ -1,6 +1,6 @@
 # 🚀 IDX Financial Downloader (Async)
 
-Downloader laporan keuangan IDX berbasis `asyncio` & `httpx`. Cepat, anti-blokir, dan mendukung penyimpanan NAS.
+Downloader laporan keuangan IDX berbasis `asyncio` & `httpx`. Cepat, anti-blokir, dan mendukung penyimpanan NAS. Kini dilengkapi dengan **Premium Web Dashboard!**
 
 ## 🛠 Instalasi
 
@@ -13,23 +13,23 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-## 🚀 Perintah Utama
+## 🖥 Web Dashboard (Rekomendasi)
+Jalankan antarmuka visual premium untuk mengontrol dan memantau download:
+```bash
+python3 web_server.py
+```
+Lalu buka browser di: [http://localhost:8000](http://localhost:8000)
 
+## 🚀 Perintah CLI
+Jika lebih suka menggunakan terminal:
 | Perintah | Fungsi |
 | :--- | :--- |
 | `python3 main.py --from-json` | Jalankan download sesuai daftar emiten terbaru |
 | `python3 main.py --years 2024,2025` | Download tahun spesifik |
-| `python3 main.py --output /path/to/nas` | Custom lokasi simpan (overrides .env) |
-| `python3 main.py --type saham` | Pilih jenis (saham/obligasi/both) |
+| `python3 main.py --output /path/to/nas` | Custom lokasi simpan |
 
 ## ⚙️ Konfigurasi (.env)
-Sesuaikan variabel di file `.env` untuk pengaturan permanen:
-- `OUTPUT_DIR`: Folder penyimpanan.
-- `BATCH_SIZE`: Jumlah emiten sebelum jeda 1 menit.
-- `CONCURRENCY_LIMIT`: Batas download paralel.
-
-## 📂 Struktur Folder
-`[OUTPUT_DIR] / [Jenis_Efek] / [Tahun] / [Kode_Emiten] / [File_Laporan]`
+Sesuaikan variabel di file `.env` untuk pengaturan permanen seperti `OUTPUT_DIR` (lokasi NAS), `BATCH_SIZE`, dan `CONCURRENCY_LIMIT`.
 
 ---
 *Status Log: Cek `downloader.log` (Detail) atau `failed.log` (Gagal).*

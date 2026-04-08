@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IDX Vision Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: radial-gradient(circle at top right, #1a202c, #0a0e14);
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+        }
+
+        .ring-gradient {
+            background: conic-gradient(#06b6d4 var(--p), #1a202c 0);
+        }
+
+        .log-line {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.8rem;
+        }
+
+        [x-cloak] { display: none !important; }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+    </style>
+</head>
+<body x-data="dashboard()">
+    <div class="max-w-7xl mx-auto px-6 py-10">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-10">
+            <div>
+                <h1 class="text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
+                    IDX VISION
+                </h1>
+                <p class="text-slate-400 text-sm mt-1">Advanced Financial Statement Downloader</p>
+            </div>
+            <div class="flex items-center gap-6">
+                <!-- Navigation Tabs -->
+                <nav class="flex glass p-1 gap-1">
+                    <button @click="view = 'dashboard'" 
+                        :class="view === 'dashboard' ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-500 hover:text-slate-300'"
+                        class="px-6 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                        Dashboard
+                    </button>
+                    <button @click="openDownloads()" 
+                        :class="view === 'downloads' ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-500 hover:text-slate-300'"
+                        class="px-6 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                        Downloads
+                    </button>
+                </nav>
+
+                <div class="flex flex-col items-end">
+                    <span class="text-xs text-slate-500 uppercase font-semibold">Server Status</span>
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full" :class="connected ? 'bg-emerald-500' : 'bg-rose-500 pulse'"></span>
+                        <span class="text-sm font-medium" x-text="connected ? 'Connected' : 'Disconnected'"></span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- DASHBOARD VIEW -->
+        <div class="grid grid-cols-12 gap-6" x-show="view === 'dashboard'" x-transition>
+            <!-- Sidebar Controls -->
+            <div class="col-span-12 lg:col-span-3 space-y-6">
+                <div class="glass p-6">
+                    <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Konfigurasi</h3>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs text-slate-500 mb-1 block">Tahun Laporan</label>
+                            <select x-model="config.year" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 outline-none">
+                                <template x-for="y in years">
+                                    <option :value="y" x-text="y"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="text-xs text-slate-500 mb-1 block">Jenis Efek</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button @click="config.type = 'saham'" 
+                                    :class="config.type === 'saham' ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400' : 'border-slate-700 text-slate-400'"
+                                    class="text-xs border rounded-lg py-2 font-medium transition-all">Saham</button>
+                                <button @click="config.type = 'obligasi'" 
+                                    :class="config.type === 'obligasi' ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400' : 'border-slate-700 text-slate-400'"
+                                    class="text-xs border rounded-lg py-2 font-medium transition-all">Obligasi</button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="text-xs text-slate-500 mb-1 block">Limit Emiten (Opsional)</label>
+                            <input type="number" x-model="config.limit" placeholder="Contoh: 10" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 outline-none">
+                        </div>
+                    </div>
+
+                    <button @click="toggleDownload()" 
+                        :disabled="!connected || transitioning"
+                        :class="running ? 'bg-rose-500 hover:bg-rose-600' : 'bg-cyan-500 hover:bg-cyan-600'"
+                        class="w-full mt-6 py-3 rounded-xl font-bold text-slate-900 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
+                        <template x-if="!running">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </template>
+                        <template x-if="running">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10h6v4H9z"/></svg>
+                        </template>
+                        <span x-text="running ? 'Berhentikan' : 'Mulai Sekarang'"></span>
+                    </button>
+                </div>
+
+                <div class="glass p-6">
+                    <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Statistik Sesi</h3>
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-end">
+                            <span class="text-xs text-slate-500">Berhasil</span>
+                            <span class="text-lg font-bold text-emerald-400" x-text="stats.downloaded">0</span>
+                        </div>
+                        <div class="flex justify-between items-end border-t border-slate-800 pt-3">
+                            <span class="text-xs text-slate-500">Terskip</span>
+                            <span class="text-lg font-bold text-slate-400" x-text="stats.skipped">0</span>
+                        </div>
+                        <div class="flex justify-between items-end border-t border-slate-800 pt-3">
+                            <span class="text-xs text-slate-500">Gagal</span>
+                            <span class="text-lg font-bold text-rose-400" x-text="stats.failed">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-span-12 lg:col-span-9 space-y-6">
+                <!-- Progress & Current Ticker -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="glass p-8 flex items-center gap-10">
+                        <div class="relative w-32 h-32 flex items-center justify-center">
+                            <div class="absolute inset-0 rounded-full border-4 border-slate-800"></div>
+                            <div class="absolute inset-0 rounded-full border-4 border-cyan-500 transition-all duration-500"
+                                 :style="`clip-path: polygon(50% 50%, 50% 0%, ${progress > 50 ? '100% 0%, 100% 100%, 0% 100%, 0% 0%,' : ''} ${progress <= 25 ? (50 + progress*2) + '% 0%' : progress <= 50 ? '100% ' + ((progress-25)*4) + '%' : progress <= 75 ? (100 - (progress-50)*4) + '% 100%' : '0% ' + (100 - (progress-75)*4) + '%'})`"
+                                 style="clip-path: none; --p: 0%"
+                                 :style="`--p: ${progress}%`"
+                                 class="ring-gradient"></div>
+                            <div class="absolute inset-2 bg-slate-900 rounded-full flex items-center justify-center">
+                                <div class="text-center">
+                                    <span class="text-3xl font-black text-white" x-text="progress + '%'">0%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-semibold text-slate-500 uppercase">Progres Keseluruhan</h4>
+                            <div class="text-2xl font-bold mt-1">
+                                <span x-text="current">0</span>
+                                <span class="text-slate-600 text-lg"> / </span>
+                                <span x-text="total">0</span>
+                                <span class="text-slate-400 text-lg ml-1">Emiten</span>
+                            </div>
+                            <div class="mt-4 flex items-center gap-2">
+                                <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-bold tracking-widest uppercase" x-text="assetLabel">---</span>
+                                <span class="text-xs text-slate-500 font-medium" x-text="currentYear">---</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass p-8 flex flex-col justify-center overflow-hidden">
+                        <div x-show="!running && progress === 0" class="text-center text-slate-500 italic py-6">
+                            Menunggu instruksi...
+                        </div>
+                        <div x-show="running || progress > 0" x-cloak>
+                            <h4 class="text-sm font-semibold text-slate-500 uppercase mb-2">Sedang Memproses</h4>
+                            <div class="flex items-center gap-4">
+                                <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center text-2xl font-black text-white shadow-xl" x-text="currentTicker">?</div>
+                                <div>
+                                    <div class="text-2xl font-black text-white" x-text="currentTicker">---</div>
+                                    <div class="flex items-center gap-2 mt-1">
+                                        <template x-if="currentStatus === 'downloaded' || currentStatus === 'success'">
+                                            <span class="text-xs font-bold text-emerald-400 uppercase tracking-tighter">Downloaded</span>
+                                        </template>
+                                        <template x-if="currentStatus === 'skipped'">
+                                            <span class="text-xs font-bold text-amber-400 uppercase tracking-tighter">Skipped (No New Data)</span>
+                                        </template>
+                                        <template x-if="currentStatus === 'failed' || currentStatus === 'no_data'">
+                                            <span class="text-xs font-bold text-rose-400 uppercase tracking-tighter" x-text="currentStatus === 'no_data' ? 'No Data Found' : 'Download Failed'">Failed</span>
+                                        </template>
+                                        <template x-if="!currentStatus">
+                                            <span class="text-xs font-bold text-cyan-400 animate-pulse uppercase tracking-tighter italic">Fetching metadata...</span>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Logs -->
+                <div class="glass flex flex-col h-[400px]">
+                    <div class="p-4 border-b border-slate-800 flex justify-between items-center">
+                        <h3 class="text-sm font-bold text-slate-300 uppercase tracking-widest">Live Terminal Logs</h3>
+                        <button @click="logs = []" class="text-[10px] text-slate-500 hover:text-white uppercase font-bold decoration-dotted underline">Clear Console</button>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-4 space-y-1 font-mono text-[10px] md:text-xs" id="log-container">
+                        <template x-for="(log, i) in logs" :key="i">
+                            <div class="flex gap-4">
+                                <span class="text-slate-600 shrink-0" x-text="log.time"></span>
+                                <span class="font-bold shrink-0" :class="{
+                                    'text-emerald-400': log.tag === 'SUCCESS',
+                                    'text-cyan-400': log.tag === 'INFO',
+                                    'text-rose-400': log.tag === 'FAILED' || log.tag === 'ERROR' || log.tag === 'NOT FOUND',
+                                    'text-amber-400': log.tag === 'RATE LIMIT' || log.tag === 'BACKOFF' | log.tag === 'SKIPPED',
+                                    'text-purple-400': log.tag === 'RECOVERY',
+                                    'text-blue-400': log.tag === 'START'
+                                }" x-text="log.tag"></span>
+                                <span class="text-slate-300 break-all" x-text="log.message"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DOWNLOADS VIEW -->
+        <div x-show="view === 'downloads'" x-transition x-cloak class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <!-- Issuer List Sidebar -->
+                <div class="md:col-span-1 glass flex flex-col h-[700px]">
+                    <div class="p-6 border-b border-slate-800">
+                        <h3 class="text-sm font-bold text-slate-300 uppercase tracking-widest mb-4">Downloaded</h3>
+                        <div class="relative">
+                            <input type="text" x-model="search" placeholder="Cari Kode..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-cyan-500 outline-none">
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-2 space-y-1">
+                        <template x-for="issuer in filteredIssuers" :key="issuer.id">
+                            <button @click="selectIssuer(issuer)" 
+                                :class="selectedIssuer?.id === issuer.id ? 'bg-cyan-500/10 border-cyan-500/50 text-cyan-400' : 'border-transparent text-slate-400 hover:bg-white/5'"
+                                class="w-full text-left px-4 py-3 rounded-xl border transition-all flex justify-between items-center group">
+                                <div>
+                                    <div class="font-bold text-sm tracking-widest" x-text="issuer.code">---</div>
+                                    <div class="text-[10px] opacity-60 font-medium" x-text="`${issuer.type.toUpperCase()} | ${issuer.year}`">---</div>
+                                </div>
+                                <div class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-500" x-text="issuer.file_count">0</div>
+                            </button>
+                        </template>
+                        <div x-show="filteredIssuers.length === 0" class="text-center py-10 text-slate-600 text-sm">
+                            Tidak ditemukan.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File Detail View -->
+                <div class="md:col-span-3 glass flex flex-col h-[700px]">
+                    <div x-show="!selectedIssuer" class="flex-1 flex flex-col items-center justify-center text-slate-600">
+                        <svg class="w-20 h-20 mb-4 opacity-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v4M14 12a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                        <p class="text-lg font-medium">Pilih emiten untuk melihat isi laporan</p>
+                    </div>
+
+                    <div x-show="selectedIssuer" x-cloak class="flex flex-col h-full">
+                        <!-- File Header -->
+                        <div class="p-8 border-b border-slate-800 flex justify-between items-center bg-white/5">
+                            <div>
+                                <h3 class="text-4xl font-black tracking-tight text-white" x-text="selectedIssuer?.code">---</h3>
+                                <div class="flex items-center gap-3 mt-1">
+                                    <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-bold uppercase tracking-widest" x-text="selectedIssuer?.type">---</span>
+                                    <span class="text-sm text-slate-500 font-medium" x-text="`Laporan Keuangan Tahun ${selectedIssuer?.year}`">---</span>
+                                </div>
+                            </div>
+                            <button @click="openInFinder()" class="px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm font-bold flex items-center gap-2 transition-all">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                                Buka di Finder
+                            </button>
+                        </div>
+
+                        <!-- File List -->
+                        <div class="flex-1 overflow-y-auto p-8 grid grid-cols-1 md:grid-cols-2 gap-4 h-full content-start">
+                            <template x-for="file in issuerFiles" :key="file.name">
+                                <div class="p-4 rounded-2xl bg-slate-900/50 border border-white/5 flex items-center gap-4 hover:border-cyan-500/30 transition-all cursor-default group">
+                                    <div class="w-12 h-12 rounded-xl bg-slate-800 flex flex-col items-center justify-center text-[10px] font-black text-slate-500 group-hover:text-cyan-400 transition-colors">
+                                        <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                        <span x-text="file.ext">---</span>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="text-sm font-bold text-slate-300 truncate" x-text="file.name">---</div>
+                                        <div class="text-xs text-slate-600 mt-1" x-text="file.size">0 MB</div>
+                                    </div>
+                                </div>
+                            </template>
+                            <div x-show="loadingFiles" class="col-span-2 py-20 flex flex-col items-center gap-4">
+                                <div class="w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+                                <span class="text-slate-500 text-sm font-medium">Memuat berkas...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Toast -->
+    <div x-show="alert.show" x-cloak 
+        class="fixed bottom-10 right-10 glass px-6 py-4 flex items-center gap-4 shadow-2xl transition-all z-50"
+        :class="alert.type === 'error' ? 'border-rose-500/50' : 'border-emerald-500/50'">
+        <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0" 
+             :class="alert.type === 'error' ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'">
+            <svg x-show="alert.type === 'error'" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <svg x-show="alert.type !== 'error'" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        </div>
+        <div>
+            <div class="font-bold text-sm" x-text="alert.title">Judul</div>
+            <div class="text-xs text-slate-400" x-text="alert.message">Pesan</div>
+        </div>
+    </div>
+
+    <script>
+        function dashboard() {
+            return {
+                view: 'dashboard', // dashboard or downloads
+                connected: false,
+                running: false,
+                transitioning: false,
+                ws: null,
+                logs: [],
+                years: [2026, 2025, 2024, 2023, 2022, 2021, 2020],
+                config: {
+                    year: 2025,
+                    type: 'saham',
+                    limit: ''
+                },
+                progress: 0,
+                current: 0,
+                total: 0,
+                currentTicker: '---',
+                currentStatus: '',
+                currentYear: '---',
+                assetLabel: '---',
+                stats: {
+                    downloaded: 0,
+                    skipped: 0,
+                    failed: 0
+                },
+                alert: {
+                    show: false,
+                    type: 'success',
+                    title: '',
+                    message: ''
+                },
+
+                // Downloads View State
+                issuers: [],
+                search: '',
+                selectedIssuer: null,
+                issuerFiles: [],
+                loadingFiles: false,
+
+                get filteredIssuers() {
+                    if (!this.search) return this.issuers;
+                    return this.issuers.filter(i => 
+                        i.code.toLowerCase().includes(this.search.toLowerCase())
+                    );
+                },
+
+                init() {
+                    this.connect();
+                    const saved = localStorage.getItem('idx_config');
+                    if (saved) this.config = JSON.parse(saved);
+
+                    this.$watch('config', value => {
+                        localStorage.setItem('idx_config', JSON.stringify(value));
+                    });
+                },
+
+                connect() {
+                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    this.ws = new WebSocket(`${protocol}//${window.location.host}/ws/progress`);
+                    
+                    this.ws.onopen = () => {
+                        this.connected = true;
+                        this.addLog('SYSTEM', 'Koneksi Dashboard berhasil.');
+                    };
+
+                    this.ws.onclose = () => {
+                        this.connected = false;
+                        setTimeout(() => this.connect(), 5000);
+                    };
+
+                    this.ws.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        this.handleMessage(data);
+                    };
+                },
+
+                handleMessage(data) {
+                    if (data.type === 'start') {
+                        this.running = true;
+                        this.total = data.total;
+                        this.current = 0;
+                        this.progress = 0;
+                        this.currentYear = data.year;
+                        this.assetLabel = data.asset_type;
+                        this.resetStats();
+                        this.addLog('START', `Pengunduhan Dimulai: ${data.asset_type} ${data.year}`);
+                    } else if (data.type === 'progress') {
+                        this.running = true;
+                        this.current = data.current;
+                        this.total = data.total;
+                        this.progress = Math.round((data.current / data.total) * 100);
+                        this.currentTicker = data.emiten;
+                        this.currentStatus = data.status;
+                        this.stats = data.stats;
+                        
+                        const tag = this.getStatusTag(data.status);
+                        this.addLog(tag, `${data.emiten}: ${data.status.toUpperCase()}`);
+                    } else if (data.type === 'status') {
+                        const tag = data.mode ? data.mode.toUpperCase() : 'INFO';
+                        this.addLog(tag, data.message);
+                    } else if (data.type === 'complete') {
+                        this.running = false;
+                        this.showAlert('success', 'Selesai!', data.message);
+                        this.addLog('SUCCESS', data.message);
+                        if (this.view === 'downloads') this.fetchIssuers();
+                    } else if (data.type === 'error') {
+                        this.running = false;
+                        this.showAlert('error', 'Error!', data.message);
+                        this.addLog('ERROR', data.message);
+                    } else if (data.type === 'idle') {
+                        this.running = false;
+                        if (data.message) this.addLog('INFO', data.message);
+                    }
+                },
+
+                getStatusTag(status) {
+                    if (status === 'downloaded' || status === 'success') return 'SUCCESS';
+                    if (status === 'skipped') return 'SKIPPED';
+                    return 'FAILED';
+                },
+
+                async toggleDownload() {
+                    if (this.running) {
+                        this.transitioning = true;
+                        await fetch('/stop', { method: 'POST' });
+                        this.transitioning = false;
+                    } else {
+                        this.transitioning = true;
+                        try {
+                            const resp = await fetch('/start', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(this.config)
+                            });
+                            const res = await resp.json();
+                            if (res.status !== 'success') this.showAlert('error', 'Gagal', res.message);
+                        } finally {
+                            this.transitioning = false;
+                        }
+                    }
+                },
+
+                // DOWNLOADS LOGIC
+                async openDownloads() {
+                    this.view = 'downloads';
+                    await this.fetchIssuers();
+                },
+
+                async fetchIssuers() {
+                    try {
+                        const resp = await fetch('/api/issuers');
+                        const data = await resp.json();
+                        this.issuers = data.issuers;
+                    } catch (e) {
+                        this.showAlert('error', 'Error', 'Gagal mengambil daftar emiten.');
+                    }
+                },
+
+                async selectIssuer(issuer) {
+                    this.selectedIssuer = issuer;
+                    this.issuerFiles = [];
+                    this.loadingFiles = true;
+                    try {
+                        const resp = await fetch(`/api/files/${issuer.type}/${issuer.year}/${issuer.code}`);
+                        const data = await resp.json();
+                        this.issuerFiles = data.files;
+                    } catch (e) {
+                        this.showAlert('error', 'Error', 'Gagal memuat berkas.');
+                    } finally {
+                        this.loadingFiles = false;
+                    }
+                },
+
+                async openInFinder() {
+                    if (!this.selectedIssuer) return;
+                    try {
+                        await fetch('/api/open-folder', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ path: this.selectedIssuer.path })
+                        });
+                    } catch (e) {
+                        this.showAlert('error', 'Error', 'Gagal membuka folder di Finder.');
+                    }
+                },
+
+                addLog(tag, message) {
+                    const time = new Date().toLocaleTimeString('id-ID', { hour12: false });
+                    this.logs.unshift({ time, tag, message });
+                    if (this.logs.length > 300) this.logs.pop();
+                },
+
+                resetStats() {
+                    this.stats = { downloaded: 0, skipped: 0, failed: 0 };
+                },
+
+                showAlert(type, title, message) {
+                    this.alert = { show: true, type, title, message };
+                    setTimeout(() => this.alert.show = false, 5000);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
