@@ -96,23 +96,29 @@ class IDXDownloader:
         return all_results
 
     def download_file(self, url, filename, subfolder=""):
-        """Download file sambil munculin bar prosesnya"""
+        """Download file dengan cek ukuran (biar auto-update kalau isi berubah)"""
         full_path = os.path.join(self.save_dir, subfolder)
         os.makedirs(full_path, exist_ok=True)
         filepath = os.path.join(full_path, filename)
 
-        if os.path.exists(filepath):
-            return True
-
         try:
+            # Buka koneksi dulu buat cek ukuran di server
             response = self.session.get(url, stream=True, timeout=30)
             response.raise_for_status()
             
-            total_size = int(response.headers.get('content-length', 0))
+            remote_size = int(response.headers.get('content-length', 0))
             
+            # Kalau file lokal sudah ada, bandingkan ukurannya
+            if os.path.exists(filepath):
+                local_size = os.path.getsize(filepath)
+                if local_size == remote_size:
+                    return True # Ukuran sama, skip aja
+                else:
+                    logging.info(f"Mendeteksi perubahan file: {filename} (Lokal: {local_size}, Server: {remote_size})")
+
             with open(filepath, 'wb') as f, tqdm(
                 desc=filename,
-                total=total_size,
+                total=remote_size,
                 unit='iB',
                 unit_scale=True,
                 unit_divisor=1024,
@@ -123,7 +129,7 @@ class IDXDownloader:
                     bar.update(size)
             return True
         except Exception as e:
-            logging.error(f"Error downloading {filename}: {e}")
+            logging.error(f"Gagal download {filename}: {e}")
             return False
 
     def run(self, year=2026, emiten_type="s", limit=None):
