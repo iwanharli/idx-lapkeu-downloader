@@ -36,20 +36,17 @@ async def harvest_cookies():
         
         print("🔗 Menghubungkan ke IDX untuk memancing Cloudflare...")
         try:
-            # Buka halaman utama dulu
-            await page.goto("https://www.idx.co.id/id/perusahaan-tercatat/laporan-keuangan-dan-tahunan", wait_until="networkidle", timeout=90000)
+            # Ganti networkidle ke domcontentloaded agar tidak gampang timeout
+            await page.goto("https://www.idx.co.id/id/perusahaan-tercatat/laporan-keuangan-dan-tahunan", wait_until="domcontentloaded", timeout=60000)
             
-            print("⏳ Menunggu verifikasi Cloudstile (max 20 detik)...")
-            # Kita tunggu sampai elemen "Laporan Keuangan" muncul, tandanya sudah lolos verifikasi
+            print("⏳ Menunggu verifikasi Cloudflare (30 detik)...")
+            # Kita kasih waktu browser buat ngerjain tugas dari Cloudflare
+            await asyncio.sleep(30)
+            
             success = False
-            for _ in range(20):
-                content = await page.content()
-                if "Laporan Keuangan" in content:
-                    success = True
-                    break
-                await asyncio.sleep(1)
-            
-            if success:
+            content = await page.content()
+            if "Laporan Keuangan" in content:
+                success = True
                 print("✅ BERHASIL! Cloudflare terlewati.")
                 # Ambil cookies
                 cookies = await context.cookies()
