@@ -9,10 +9,15 @@ import time
 import json
 from datetime import datetime
 from dotenv import load_dotenv
-from fetch_emiten import EmitenFetcher
+import random
 
 # Load environment variables
 load_dotenv()
+
+# Force IPv4 if needed (helps bypass some VPS blocks)
+FORCE_IPV4 = os.getenv("FORCE_IPV4", "true").lower() == "true"
+PROXY_URL = os.getenv("PROXY_URL") # format: http://user:pass@host:port
+from fetch_emiten import EmitenFetcher
 
 # Setup Logger
 logger = logging.getLogger("IDXDownloader")
@@ -277,8 +282,24 @@ class IDXDownloader:
         type_name = "saham" if emiten_type == "s" else "obligasi"
         type_label = type_name.upper()
         
-        # Gunakan HTTP/2 agar lebih mirip browser asli
-        async with httpx.AsyncClient(headers=self.HEADERS, follow_redirects=True, timeout=None, http2=True) as client:
+        proxy = PROXY_URL
+        limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+        
+        # Setup transport
+        transport = httpx.AsyncHTTPTransport(
+            http2=True,
+            local_address="0.0.0.0" if FORCE_IPV4 else None,
+            retries=3
+        )
+
+        async with httpx.AsyncClient(
+            headers=self.HEADERS, 
+            follow_redirects=True, 
+            timeout=None, 
+            http2=True,
+            proxy=proxy,
+            transport=transport
+        ) as client:
             emiten_to_process = []
             
             if from_json:

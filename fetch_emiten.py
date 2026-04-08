@@ -89,8 +89,26 @@ class EmitenFetcher:
 
     async def fetch_all(self):
         import random
+        # Load env for proxy
+        from dotenv import load_dotenv
+        load_dotenv()
+        
+        proxy = os.getenv("PROXY_URL")
+        force_ipv4 = os.getenv("FORCE_IPV4", "true").lower() == "true"
+        
+        transport = httpx.AsyncHTTPTransport(
+            http2=True,
+            local_address="0.0.0.0" if force_ipv4 else None
+        )
+
         # Gunakan HTTP/2 agar lebih mirip browser asli
-        async with httpx.AsyncClient(headers=self.HEADERS, follow_redirects=True, http2=True) as client:
+        async with httpx.AsyncClient(
+            headers=self.HEADERS, 
+            follow_redirects=True, 
+            http2=True,
+            proxy=proxy,
+            transport=transport
+        ) as client:
             logger.warning("[INFO] Menunggu jeda acak awal (anti-bot)...")
             await asyncio.sleep(random.uniform(1.5, 3.5))
             
