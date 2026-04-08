@@ -1,27 +1,38 @@
 import asyncio
 from playwright.async_api import async_playwright
-import playwright_stealth
 import json
 import os
 
 async def harvest_cookies():
     async with async_playwright() as p:
-        print("🚀 Memulai Browser Penyamar (Stealth Mode)...")
-        browser = await p.chromium.launch(headless=True)
+        print("🚀 Memulai Browser (Manual Stealth Mode)...")
+        # Gunakan argumen agar tidak terlihat seperti otomasi
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                '--disable-blink-features=AutomationControlled',
+                '--no-sandbox',
+                '--disable-setuid-sandbox'
+            ]
+        )
         
-        # User agent modern
+        # User agent modern Windows
         ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
         
-        context = await browser.new_context(user_agent=ua)
+        context = await browser.new_context(
+            user_agent=ua,
+            viewport={'width': 1920, 'height': 1080},
+            device_scale_factor=1,
+            is_mobile=False,
+            has_touch=False,
+            locale="id-ID",
+            timezone_id="Asia/Jakarta"
+        )
+        
         page = await context.new_page()
         
-        # Terapkan stealth agar tidak ketahuan bot
-        try:
-            from playwright_stealth import stealth_async
-            await stealth_async(page)
-        except ImportError:
-            from playwright_stealth import stealth_page
-            await stealth_page(page)
+        # Hapus tanda automation dari navigator
+        await page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         
         print("🔗 Menghubungkan ke IDX untuk memancing Cloudflare...")
         try:
