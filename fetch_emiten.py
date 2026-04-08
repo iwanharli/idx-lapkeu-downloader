@@ -3,7 +3,6 @@ import json
 import requests
 import logging
 
-# Atur log biar kelihatan prosesnya
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class EmitenFetcher:
@@ -24,7 +23,6 @@ class EmitenFetcher:
         self.session.headers.update(self.HEADERS)
 
     def fetch_all(self):
-        """Ambil list semua kode emiten (saham & obligasi)"""
         all_emiten = []
         
         for e_type in ['s', 'o']:
@@ -36,7 +34,6 @@ class EmitenFetcher:
                 response.raise_for_status()
                 data = response.json()
                 
-                # Tandain mana yang saham mana yang obligasi
                 for item in data:
                     item['JenisEfek'] = type_label
                     all_emiten.append(item)
@@ -44,7 +41,6 @@ class EmitenFetcher:
             except Exception as e:
                 logging.error(f"Gagal mengambil daftar {type_label}: {e}")
 
-        # Simpan hasilnya ke file JSON
         try:
             with open(self.save_path, 'w', encoding='utf-8') as f:
                 json.dump(all_emiten, f, indent=4, ensure_ascii=False)

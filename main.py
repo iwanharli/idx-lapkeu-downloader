@@ -4,7 +4,6 @@ import requests
 from tqdm import tqdm
 import logging
 
-# Atur log biar enak dipantau
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -37,11 +36,9 @@ class IDXDownloader:
         self.save_dir = save_dir
         self.session = requests.Session()
         self.session.headers.update(self.HEADERS)
-        # Kalau nanti kena blokir Cloudflare, mungkin butuh cookies tambahan
         os.makedirs(self.save_dir, exist_ok=True)
 
     def get_emiten_list(self):
-        """Ambil daftar semua perusahaan yang ada di bursa"""
         logging.info("Fetching emiten list...")
         try:
             response = self.session.get(self.EMITEN_API)
@@ -52,7 +49,6 @@ class IDXDownloader:
             return []
 
     def get_reports_metadata(self, year, emiten_type="s", report_type="rdf", periode="audit", page_size=100):
-        """Ambil metadata buat laporan keuangan (dengan pengulangan halaman otomatis)"""
         logging.info(f"Mengambil metadata Tahun: {year}, Tipe: {report_type}, Efek: {emiten_type}...")
         
         all_results = []
@@ -80,14 +76,13 @@ class IDXDownloader:
                     
                 all_results.extend(results)
                 
-                # Cek jumlah total yang ada di server (harus pakai ResultCount)
                 total = data.get("ResultCount", 0)
                 if len(all_results) >= total:
                     break
                     
                 index_from += page_size
                 logging.info(f"Sudah terambil {len(all_results)} dari {total} data...")
-                time.sleep(1) # Jeda biar nggak kena blokir
+                time.sleep(1)
                 
             except Exception as e:
                 logging.error(f"Gagal ambil data pada urutan {index_from}: {e}")
@@ -96,23 +91,20 @@ class IDXDownloader:
         return all_results
 
     def download_file(self, url, filename, subfolder=""):
-        """Download file dengan cek ukuran (biar auto-update kalau isi berubah)"""
         full_path = os.path.join(self.save_dir, subfolder)
         os.makedirs(full_path, exist_ok=True)
         filepath = os.path.join(full_path, filename)
 
         try:
-            # Buka koneksi dulu buat cek ukuran di server
             response = self.session.get(url, stream=True, timeout=30)
             response.raise_for_status()
             
             remote_size = int(response.headers.get('content-length', 0))
             
-            # Kalau file lokal sudah ada, bandingkan ukurannya
             if os.path.exists(filepath):
                 local_size = os.path.getsize(filepath)
                 if local_size == remote_size:
-                    return True # Ukuran sama, skip aja
+                    return True
                 else:
                     logging.info(f"Mendeteksi perubahan file: {filename} (Lokal: {local_size}, Server: {remote_size})")
 
@@ -133,7 +125,6 @@ class IDXDownloader:
             return False
 
     def run(self, year=2026, emiten_type="s", limit=None):
-        """Proses utama buat download semua laporan per tahun dan jenis efek"""
         type_name = "saham" if emiten_type == "s" else "obligasi"
         reports = self.get_reports_metadata(year=year, emiten_type=emiten_type)
         
@@ -150,7 +141,6 @@ class IDXDownloader:
         success_count = 0
         for info in tqdm(reports, desc="Overall Progress"):
             kode = info.get("KodeEmiten")
-            # Ambil semua lampiran yang ada
             attachments = info.get("Attachments", [])
             
             downloaded_for_emiten = False
@@ -158,22 +148,19 @@ class IDXDownloader:
                 file_path = attachment.get("File_Path")
                 file_name = attachment.get("File_Name", "")
                 
-                # Sikat semua jenis file yang ada
                 if file_path:
                     download_url = self.BASE_URL + file_path
                     
-                    # Create a friendly filename
                     ext = os.path.splitext(file_path)[1]
                     local_filename = f"{file_name}".replace(" ", "_")
                     if not local_filename.endswith(ext):
                         local_filename += ext
                     
-                    # Subfolder structure: {type}/{YEAR}/{KODE}
                     subfolder = os.path.join(type_name, str(year), kode)
                     
                     if self.download_file(download_url, local_filename, subfolder=subfolder):
                         downloaded_for_emiten = True
-            time.sleep(1) # Jeda dikit biar nggak dikira spam
+            time.sleep(1)
             
             if downloaded_for_emiten:
                 success_count += 1
@@ -185,24 +172,20 @@ class IDXDownloader:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="IDX Financial Statement Downloader")
-    parser.add_argument("--years", type=str, default="2026", help="Years to download (e.g., 2026 or 2022,2023,2024)")
-    parser.add_argument("--start-year", type=int, help="Start year for range download")
-    parser.add_argument("--end-year", type=int, help="End year for range download")
-    parser.add_argument("--type", type=str, default="saham", choices=["saham", "obligasi", "both"], help="Asset type to download")
-    parser.add_argument("--limit", type=int, default=None, help="Limit jumlah perusahaan per tahun (buat testing)")
+    parser.add_argument("--years", type=str, default="2026", help="Years to download")
+    parser.add_argument("--start-year", type=int, help="Start year")
+    parser.add_argument("--end-year", type=int, help="End year")
+    parser.add_argument("--type", type=str, default="saham", choices=["saham", "obligasi", "both"], help="Asset type")
+    parser.add_argument("--limit", type=int, default=None, help="Limit per year")
     
     args = parser.parse_args()
-    
     downloader = IDXDownloader()
     
     years_to_download = []
     asset_types = []
     
-    # Kalau dijalanin polosan (tanpa argumen)
     if not args.start_year and not args.end_year and args.years == "2026" and args.type == "saham":
         print("\n=== IDX Financial Statement Downloader ===")
-        
-        # 1. Pilih Jenis Efek
         print("\nPilih Jenis Efek:")
         print("1. Saham")
         print("2. Obligasi")
@@ -216,7 +199,6 @@ if __name__ == "__main__":
         else:
             asset_types = ["s"]
 
-        # 2. Pilih Rentang Tahun
         try:
             start_in = input("\nMasukkan tahun awal (default 2026): ").strip()
             start = int(start_in) if start_in else 2026
@@ -225,15 +207,14 @@ if __name__ == "__main__":
             end = int(end_in) if end_in else 2026
             
             if start > end:
-                print("Tahun awal tidak boleh lebih besar dari tahun akhir. Menukar posisi...")
+                print("Tahun awal > tahun akhir. Menukar...")
                 start, end = end, start
                 
             years_to_download = list(range(start, end + 1))
         except ValueError:
-            print("Input tidak valid, mendownload tahun 2026 saja.")
+            print("Input tidak valid, download tahun 2026 saja.")
             years_to_download = [2026]
     else:
-        # Ini kalau user pakai perintah langsung di terminal
         if args.start_year and args.end_year:
             years_to_download = list(range(args.start_year, args.end_year + 1))
         else:
