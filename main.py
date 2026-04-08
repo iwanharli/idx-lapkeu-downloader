@@ -80,8 +80,8 @@ class IDXDownloader:
                     
                 all_results.extend(results)
                 
-                # Cek jumlah total yang ada di server
-                total = data.get("RecordCount", 0)
+                # Cek jumlah total yang ada di server (harus pakai ResultCount)
+                total = data.get("ResultCount", 0)
                 if len(all_results) >= total:
                     break
                     
