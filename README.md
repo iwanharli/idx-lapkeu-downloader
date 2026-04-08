@@ -1,62 +1,35 @@
-# 🚀 IDX Financial Downloader (Async Edition)
+# 🚀 IDX Financial Downloader (Async)
 
-Halo! Selamat datang di alat sedot data laporan keuangan IDX paling ngebut dan "anti-baper" terhadap blokir server. 😎
+Downloader laporan keuangan IDX berbasis `asyncio` & `httpx`. Cepat, anti-blokir, dan mendukung penyimpanan NAS.
 
-Script ini dirancang buat kamu yang males nungguin download satu-satu atau capek karena sering di-PHP-in sama server IDX yang hobi kasih error 403.
+## 🛠 Instalasi
 
-## ✨ Kenapa Pake Ini?
-
-- **Ngebut Parah**: Pake tenaga `asyncio`, download-nya keroyokan jadi jauh lebih cepet.
-- **Anti-Blokir**: Ada fitur *Backoff* otomatis. Kalau server IDX lagi sensi, script ini bakal "sabar" nunggu bentar terus lanjut lagi.
-- **Pantang Menyerah**: Kalau ada download yang gagal di tengah jalan, script bakal otomatis nyoba lagi sampe 10x di akhir proses. Gak ada file yang ketinggalan!
-- **Ramah NAS**: Bisa langsung tembak simpen ke NAS atau harddisk eksternal. Memory laptop kamu aman!
-- **Gampang Diatur**: Semua settingan tinggal atur di file `.env`. Gak perlu pusing bongkar pasang kode.
-
-## 🛠 Cara Pasang (Gampang Kok!)
-
-1. **Ambil Kodenya**:
-   ```bash
-   git clone https://github.com/iwanharli/idx-lapkeu-downloader.git
-   cd idx-lapkeu-downloader
-   ```
-
-2. **Siapin "Lingkungannya"**:
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
-
-3. **Atur Settingan**:
-   Copy file `.env.example` jadi `.env` terus edit dikit sesuai selera kamu.
-   ```bash
-   cp .env.example .env
-   ```
-
-## 🚀 Gas Download!
-
-### Cara Paling Manjur
-Cukup ketik ini dan biarkan script yang kerja lembur buat kamu:
 ```bash
-python3 main.py --from-json
+git clone https://github.com/iwanharli/idx-lapkeu-downloader.git
+cd idx-lapkeu-downloader
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
 ```
 
-### Opsi Tambahan Buat yang Suka Customize
-| Perintah | Fungsinya |
+## 🚀 Perintah Utama
+
+| Perintah | Fungsi |
 | :--- | :--- |
-| `--from-json` | Pakai database lokal (akurat banget!) |
-| `--output` | Simpen ke folder khusus (misal ke NAS) |
-| `--years` | Pilih tahun tertentu, misal: `2023,2024` |
-| `--type` | Mau saham aja, obligasi aja, atau keduanya (`both`) |
-| `--no-update` | Langsung download tanpa update daftar emiten |
+| `python3 main.py --from-json` | Jalankan download sesuai daftar emiten terbaru |
+| `python3 main.py --years 2024,2025` | Download tahun spesifik |
+| `python3 main.py --output /path/to/nas` | Custom lokasi simpan (overrides .env) |
+| `python3 main.py --type saham` | Pilih jenis (saham/obligasi/both) |
 
-## 📂 Hasilnya Simpen di Mana?
-Tenang, semua udah disusun rapi berdasarkan:
-`[Folder_Tujuan] / [Jenis_Efek] / [Tahun] / [Kode_Emiten] / [File_Laporan.pdf]`
+## ⚙️ Konfigurasi (.env)
+Sesuaikan variabel di file `.env` untuk pengaturan permanen:
+- `OUTPUT_DIR`: Folder penyimpanan.
+- `BATCH_SIZE`: Jumlah emiten sebelum jeda 1 menit.
+- `CONCURRENCY_LIMIT`: Batas download paralel.
 
-## 📝 Catatan Keamanan
-- Kalau liat tulisan `[RATE LIMIT]`, itu server lagi minta istirahat. Script bakal otomatis urus itu kok.
-- File log lengkap ada di `downloader.log`. Kalau mau liat yang gagal doang, cek di `failed.log`.
+## 📂 Struktur Folder
+`[OUTPUT_DIR] / [Jenis_Efek] / [Tahun] / [Kode_Emiten] / [File_Laporan]`
 
 ---
-*Dibuat biar hidup analis saham jadi lebih indah. Selamat berburu data!* 📈🔥
+*Status Log: Cek `downloader.log` (Detail) atau `failed.log` (Gagal).*

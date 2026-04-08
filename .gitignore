@@ -11,3 +11,8 @@ dist/
 build/
 *.spec
 .DS_Store
+
+# Enviroment & Logs
+.env
+.env.*
+failed.log
