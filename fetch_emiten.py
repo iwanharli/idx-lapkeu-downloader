@@ -96,6 +96,15 @@ class EmitenFetcher:
         proxy = os.getenv("PROXY_URL")
         force_ipv4 = os.getenv("FORCE_IPV4", "true").lower() == "true"
         
+        # Load cookies if available
+        cookies = None
+        if os.path.exists("cookies.json"):
+            try:
+                with open("cookies.json", 'r') as f:
+                    cookies_list = json.load(f)
+                    cookies = {c['name']: c['value'] for c in cookies_list}
+            except: pass
+
         transport = httpx.AsyncHTTPTransport(
             http2=True,
             local_address="0.0.0.0" if force_ipv4 else None
@@ -107,7 +116,8 @@ class EmitenFetcher:
             follow_redirects=True, 
             http2=True,
             proxy=proxy,
-            transport=transport
+            transport=transport,
+            cookies=cookies
         ) as client:
             logger.warning("[INFO] Menunggu jeda acak awal (anti-bot)...")
             await asyncio.sleep(random.uniform(1.5, 3.5))

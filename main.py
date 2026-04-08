@@ -283,6 +283,16 @@ class IDXDownloader:
         type_label = type_name.upper()
         
         proxy = PROXY_URL
+        
+        # Load cookies if available
+        cookies = None
+        if os.path.exists("cookies.json"):
+            try:
+                with open("cookies.json", 'r') as f:
+                    cookies_list = json.load(f)
+                    cookies = {c['name']: c['value'] for c in cookies_list}
+            except: pass
+
         limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
         
         # Setup transport
@@ -298,7 +308,8 @@ class IDXDownloader:
             timeout=None, 
             http2=True,
             proxy=proxy,
-            transport=transport
+            transport=transport,
+            cookies=cookies
         ) as client:
             emiten_to_process = []
             
