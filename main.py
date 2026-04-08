@@ -30,6 +30,13 @@ ch.setFormatter(formatter)
 logger.addHandler(fh)
 logger.addHandler(ch)
 
+# Failed Logger
+failed_logger = logging.getLogger("FailedDownloader")
+failed_logger.setLevel(logging.ERROR)
+ffh = logging.FileHandler("failed.log")
+ffh.setFormatter(formatter)
+failed_logger.addHandler(ffh)
+
 # Silence noisy libraries
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
@@ -49,8 +56,8 @@ class IDXDownloader:
     def __init__(self, save_dir="laporan_keuangan", concurrency_limit=5):
         self.save_dir = save_dir
         self.semaphore = asyncio.Semaphore(concurrency_limit)
-        # Kurangi angka ini untuk menghindari 403 Forbidden
         self.meta_semaphore = asyncio.Semaphore(2) 
+        self.failed_queue = [] # Antrean untuk percobaan ulang di akhir
         os.makedirs(self.save_dir, exist_ok=True)
 
     async def get_reports_metadata(self, client, year, emiten_type="s", emiten_code=None, report_type="rdf", periode="audit", page_size=2000):
@@ -69,12 +76,11 @@ class IDXDownloader:
             params["kodeEmiten"] = emiten_code
 
         max_retries = 3
-        backoff_times = [5, 15, 30] # Detil jeda tiap retry
+        backoff_times = [5, 15, 30] 
 
         for attempt in range(max_retries):
             async with self.meta_semaphore:
                 try:
-                    # Jeda antar request dasar agar lebih manusiawi
                     if emiten_code:
                         await asyncio.sleep(0.5)
                         
@@ -103,16 +109,18 @@ class IDXDownloader:
                     return []
         return []
 
-    async def download_file(self, client, url, filename, emiten_code, subfolder=""):
+    async def download_file(self, client, url, filename, emiten_code, subfolder="", is_recovery=False):
         full_path = os.path.join(self.save_dir, subfolder)
         filepath = os.path.join(full_path, filename)
 
         async with self.semaphore:
             try:
+                # Jeda tipis biar nggak terlalu kasar
+                if not is_recovery:
+                    await asyncio.sleep(0.1)
+
                 # Cek jika file sudah ada tanpa buat folder dulu
                 if os.path.exists(filepath):
-                    # Gunakan HEAD request atau stream GET singkat untuk cek size jika tersedia
-                    # Tapi karena IDX sering blokir, kita sesuaikan timeoutnya
                     async with client.stream("GET", url, timeout=10) as response:
                         if response.status_code == 200:
                             remote_size = int(response.headers.get('content-length', 0))
@@ -123,24 +131,86 @@ class IDXDownloader:
                 
                 async with client.stream("GET", url, timeout=60) as response:
                     if response.status_code == 404:
-                        logger.error(f"FILE NOT FOUND | {filename}")
+                        logger.error(f"[NOT FOUND]  | {emiten_code} | {filename}")
                         return "failed"
-                        
+                    
+                    if response.status_code in [403, 429]:
+                        logger.error(f"[RATE LIMIT] | {emiten_code} | {filename}")
+                        raise httpx.HTTPStatusError(f"Server returned {response.status_code}", request=response.request, response=response)
+
                     response.raise_for_status()
                     os.makedirs(full_path, exist_ok=True)
                     async with aiofiles.open(filepath, mode='wb') as f:
                         async for chunk in response.aiter_bytes(chunk_size=8192):
                             await f.write(chunk)
                     
-                    logger.info(f"[SUCCESS] [{emiten_code}] {filename}")
+                    logger.info(f"[SUCCESS]    | {emiten_code} | {filename}")
                     return "success"
             except Exception as e:
                 err_msg = str(e).splitlines()[0]
                 if "404 Not Found" in err_msg:
-                    logger.error(f"FILE NOT FOUND | {filename}")
+                    logger.error(f"[NOT FOUND]  | {emiten_code} | {filename}")
+                elif any(x in err_msg for x in ["403", "429", "Forbidden", "Too Many Requests"]):
+                    # Jangan log lagi jika sudah di log di atas (RATE LIMIT), 
+                    # tapi tetap catat kegagalan untuk recovery
+                    if "[RATE LIMIT]" not in err_msg:
+                        logger.error(f"[RATE LIMIT] | {emiten_code} | {filename}")
                 else:
-                    logger.error(f"[FAILED] [{emiten_code}] {filename} - {err_msg}")
+                    logger.error(f"[FAILED]     | {emiten_code} | {filename} - {err_msg}")
+                
+                # Catat ke failed_logger dan antrean recovery
+                if not is_recovery:
+                    failed_logger.error(f"{emiten_code} | {filename} | {url} | {err_msg}")
+                    self.failed_queue.append({
+                        "url": url,
+                        "filename": filename,
+                        "emiten_code": emiten_code,
+                        "subfolder": subfolder
+                    })
                 return "failed"
+
+    async def run_recovery(self, client):
+        if not self.failed_queue:
+            return 0
+
+        logger.warning(f"\n[RECOVERY] Memulai proses ulang untuk {len(self.failed_queue)} file yang gagal...")
+        
+        max_rounds = 10
+        recovered_count = 0
+
+        for round_num in range(1, max_rounds + 1):
+            if not self.failed_queue:
+                break
+            
+            logger.warning(f"[RECOVERY] Putaran {round_num}/{max_rounds} - Mencoba {len(self.failed_queue)} file...")
+            
+            # Gunakan list sementara untuk menampung yang masih gagal
+            current_queue = self.failed_queue.copy()
+            self.failed_queue = []
+            
+            pbar = tqdm(total=len(current_queue), desc=f"Recovery Round {round_num}")
+            
+            tasks = [self.download_file(client, f["url"], f["filename"], f["emiten_code"], f["subfolder"], is_recovery=True) for f in current_queue]
+            
+            # Eksekusi dan pilah yang berhasil vs tetap gagal
+            results = await asyncio.gather(*tasks)
+            
+            for i, result in enumerate(results):
+                if result == "success":
+                    recovered_count += 1
+                else:
+                    # Jika tetap gagal, masukkan lagi ke antrean utama untuk putaran berikutnya
+                    self.failed_queue.append(current_queue[i])
+                pbar.update(1)
+            
+            pbar.close()
+            
+            if self.failed_queue and round_num < max_rounds:
+                wait_btn = 5 * round_num # Jeda antar putaran makin lama
+                logger.warning(f"[RECOVERY] Selesai putaran {round_num}. Istirahat {wait_btn} detik...")
+                await asyncio.sleep(wait_btn)
+
+        return recovered_count
 
     async def process_emiten(self, client, emiten_code, year, emiten_type, subfolder_prefix):
         reports = await self.get_reports_metadata(client, year, emiten_type=emiten_type, emiten_code=emiten_code)
@@ -166,7 +236,7 @@ class IDXDownloader:
                     download_url = self.BASE_URL + cleaned_path
                     
                     ext = os.path.splitext(file_path)[1]
-                    local_filename = f"{file_name}".replace(" ", "_")
+                    local_filename = f"{file_name}".replace(" ", "_").replace("/", "_")
                     if not local_filename.endswith(ext):
                         local_filename += ext
                     
@@ -179,11 +249,9 @@ class IDXDownloader:
 
         file_results = await asyncio.gather(*file_tasks)
         
-        # Aggregate file stats
         for r in file_results:
             res["file_stats"][r] += 1
 
-        # Determine emiten status
         if res["file_stats"]["success"] > 0:
             res["emiten_status"] = "downloaded"
         elif res["file_stats"]["failed"] > 0:
@@ -197,7 +265,7 @@ class IDXDownloader:
         type_name = "saham" if emiten_type == "s" else "obligasi"
         type_label = type_name.upper()
         
-        async with httpx.AsyncClient(headers=self.HEADERS, follow_redirects=True) as client:
+        async with httpx.AsyncClient(headers=self.HEADERS, follow_redirects=True, timeout=None) as client:
             emiten_to_process = []
             
             if from_json:
@@ -225,13 +293,11 @@ class IDXDownloader:
                 logger.warning(f"[WARN] Tidak ada emiten untuk diproses.")
                 return
 
-            # Stats tracking
             emiten_stats = {"downloaded": 0, "skipped": 0, "failed": 0, "no_data": 0}
             total_file_stats = {"success": 0, "skipped": 0, "failed": 0}
             
             pbar = tqdm(total=len(emiten_to_process), desc=f"IDX {type_label} {year}")
             
-            # Use as_completed for better visual progress even with backoffs
             tasks = [self.process_emiten(client, code, year, emiten_type, type_name) for code in emiten_to_process]
             
             for task in asyncio.as_completed(tasks):
@@ -254,6 +320,14 @@ class IDXDownloader:
                 pbar.update(1)
             pbar.close()
 
+            # Proses Recovery
+            initial_failed = total_file_stats["failed"]
+            recovered = 0
+            if self.failed_queue:
+                recovered = await self.run_recovery(client)
+                total_file_stats["success"] += recovered
+                total_file_stats["failed"] -= recovered
+
             total_files = sum(total_file_stats.values())
 
             # Final Summary
@@ -266,7 +340,7 @@ class IDXDownloader:
                 logger.warning(f"  - Emiten No Data     : {emiten_stats['no_data']}")
             logger.warning(f"--------------------------------------------")
             logger.warning(f"  - Total Files     : {total_files}")
-            logger.warning(f"  - Downloaded      : {total_file_stats['success']}")
+            logger.warning(f"  - Downloaded      : {total_file_stats['success']} (Recovered: {recovered})")
             logger.warning(f"  - Skipped         : {total_file_stats['skipped']}")
             logger.warning(f"  - Failed          : {total_file_stats['failed']}")
             logger.warning(f"============================================")
