@@ -1,6 +1,6 @@
 import asyncio
 from playwright.async_api import async_playwright
-from playwright_stealth import stealth_async
+import playwright_stealth
 import json
 import os
 
@@ -16,7 +16,12 @@ async def harvest_cookies():
         page = await context.new_page()
         
         # Terapkan stealth agar tidak ketahuan bot
-        await stealth_async(page)
+        try:
+            from playwright_stealth import stealth_async
+            await stealth_async(page)
+        except ImportError:
+            from playwright_stealth import stealth_page
+            await stealth_page(page)
         
         print("🔗 Menghubungkan ke IDX untuk memancing Cloudflare...")
         try:
