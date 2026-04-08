@@ -1,9 +1,32 @@
 import os
 import json
-import requests
+import asyncio
+import httpx
 import logging
+from datetime import datetime
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Setup Logger
+logger = logging.getLogger("EmitenFetcher")
+logger.setLevel(logging.INFO)
+
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+# File Handler
+fh = logging.FileHandler("downloader.log")
+fh.setLevel(logging.INFO)
+fh.setFormatter(formatter)
+
+# Console Handler (Quiet)
+ch = logging.StreamHandler()
+ch.setLevel(logging.WARNING)
+ch.setFormatter(formatter)
+
+logger.addHandler(fh)
+logger.addHandler(ch)
+
+# Silence noisy libraries
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 class EmitenFetcher:
     BASE_URL = "https://www.idx.co.id"
@@ -19,35 +42,56 @@ class EmitenFetcher:
     def __init__(self, save_path="laporan_keuangan/list_emiten/emiten-code.json"):
         self.save_path = save_path
         os.makedirs(os.path.dirname(self.save_path), exist_ok=True)
-        self.session = requests.Session()
-        self.session.headers.update(self.HEADERS)
 
-    def fetch_all(self):
-        all_emiten = []
+    async def fetch_type(self, client, e_type):
+        type_label = "Saham" if e_type == 's' else "Obligasi"
+        logger.warning(f"[INFO] Mengambil daftar {type_label} terbaru...")
         
-        for e_type in ['s', 'o']:
-            type_label = "Saham" if e_type == 's' else "Obligasi"
-            logging.info(f"Mengambil daftar {type_label}...")
-            
-            try:
-                response = self.session.get(f"{self.EMITEN_API}?emitenType={e_type}")
-                response.raise_for_status()
-                data = response.json()
-                
-                for item in data:
-                    item['JenisEfek'] = type_label
-                    all_emiten.append(item)
-                    
-            except Exception as e:
-                logging.error(f"Gagal mengambil daftar {type_label}: {e}")
-
         try:
-            with open(self.save_path, 'w', encoding='utf-8') as f:
-                json.dump(all_emiten, f, indent=4, ensure_ascii=False)
-            logging.info(f"Berhasil menyimpan {len(all_emiten)} emiten ke: {self.save_path}")
+            response = await client.get(f"{self.EMITEN_API}?emitenType={e_type}", timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            
+            for item in data:
+                item['JenisEfek'] = type_label
+            
+            logger.info(f"[SUCCESS] Berhasil mengambil {len(data)} data {type_label}.")
+            return data
         except Exception as e:
-            logging.error(f"Gagal menyimpan file JSON: {e}")
+            logger.error(f"[ERROR] Gagal mengambil daftar {type_label}: {str(e).splitlines()[0]}")
+            return []
+
+    async def fetch_all(self):
+        async with httpx.AsyncClient(headers=self.HEADERS, follow_redirects=True) as client:
+            tasks = [self.fetch_type(client, 's'), self.fetch_type(client, 'o')]
+            results = await asyncio.gather(*tasks)
+            
+            all_emiten = []
+            for r in results:
+                all_emiten.extend(r)
+
+            # Metadata wrapping
+            output_data = {
+                "metadata": {
+                    "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "total_emiten": len(all_emiten),
+                    "source": self.BASE_URL
+                },
+                "emiten_list": all_emiten
+            }
+
+            try:
+                with open(self.save_path, 'w', encoding='utf-8') as f:
+                    json.dump(output_data, f, indent=4, ensure_ascii=False)
+                
+                logger.warning(f"[SUCCESS] Daftar emiten diperbarui: {len(all_emiten)} entitas tersimpan.")
+                logger.info(f"File disimpan di: {self.save_dir if hasattr(self, 'save_dir') else self.save_path}")
+            except Exception as e:
+                logger.error(f"[ERROR] Gagal menyimpan file JSON: {e}")
 
 if __name__ == "__main__":
     fetcher = EmitenFetcher()
-    fetcher.fetch_all()
+    try:
+        asyncio.run(fetcher.fetch_all())
+    except KeyboardInterrupt:
+        print("\nDihentikan.")
