@@ -223,7 +223,7 @@
                 </div>
 
                 <!-- Logs -->
-                <div class="glass flex flex-col h-[400px]">
+                <div class="glass flex flex-col h-[580px]">
                     <div class="p-4 border-b border-slate-800 flex justify-between items-center">
                         <h3 class="text-sm font-bold text-slate-300 uppercase tracking-widest">Live Terminal Logs</h3>
                         <button @click="logs = []" class="text-[10px] text-slate-500 hover:text-white uppercase font-bold decoration-dotted underline">Clear Console</button>
@@ -397,10 +397,10 @@
                         console.error("WS Connect error:", e);
                     }
                     
-                    // Delay API call slightly to ensure browser is ready
+                    // Delay settings call slightly to ensure browser is ready
                     setTimeout(() => {
-                        this.fetchIssuers();
-                    }, 500);
+                        this.fetchSettings();
+                    }, 300);
                     
                     const saved = localStorage.getItem('idx_config');
                     if (saved) this.config = JSON.parse(saved);
@@ -501,6 +501,17 @@
                 async openDownloads() {
                     this.view = 'downloads';
                     await this.fetchIssuers();
+                },
+
+                async fetchSettings() {
+                    console.log("Fetching settings...");
+                    try {
+                        const resp = await fetch('/api/settings');
+                        const data = await resp.json();
+                        this.storagePath = data.storage_path + (data.exists ? '' : ' (Folder belum dibuat)');
+                    } catch (e) {
+                        console.error("Fetch settings error:", e);
+                    }
                 },
 
                 async fetchIssuers() {

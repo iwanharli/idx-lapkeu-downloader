@@ -69,6 +69,16 @@ async def websocket_endpoint(websocket: WebSocket):
         if websocket in state.clients:
             state.clients.remove(websocket)
 
+@app.get("/api/settings")
+async def get_settings():
+    output_path = os.getenv("OUTPUT_DIR", "laporan_keuangan")
+    output_dir = Path(output_path)
+    storage_info = str(output_dir.absolute())
+    return {
+        "storage_path": storage_info,
+        "exists": output_dir.exists()
+    }
+
 @app.get("/api/issuers")
 async def get_issuers():
     output_path = os.getenv("OUTPUT_DIR", "laporan_keuangan")
