@@ -33,10 +33,16 @@ class EmitenFetcher:
     EMITEN_API = f"{BASE_URL}/primary/Helper/GetEmiten"
     
     HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-        "Referer": "https://www.idx.co.id/id/perusahaan-tercatat/laporan-keuangan-dan-tahunan",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
-        "X-Requested-With": "XMLHttpRequest"
+        "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Referer": "https://www.idx.co.id/id/perusahaan-tercatat/laporan-keuangan-dan-tahunan",
+        "X-Requested-With": "XMLHttpRequest",
+        "Sec-CH-UA": '"Chromium";v="123", "Not:A-Brand";v="8", "Google Chrome";v="123"',
+        "Sec-CH-UA-Mobile": "?0",
+        "Sec-CH-UA-Platform": '"Windows"',
+        "DNT": "1"
     }
 
     def __init__(self, save_path="laporan_keuangan/list_emiten/emiten-code.json"):
@@ -82,9 +88,19 @@ class EmitenFetcher:
         return []
 
     async def fetch_all(self):
-        async with httpx.AsyncClient(headers=self.HEADERS, follow_redirects=True) as client:
-            tasks = [self.fetch_type(client, 's'), self.fetch_type(client, 'o')]
-            results = await asyncio.gather(*tasks)
+        import random
+        # Gunakan HTTP/2 agar lebih mirip browser asli
+        async with httpx.AsyncClient(headers=self.HEADERS, follow_redirects=True, http2=True) as client:
+            logger.warning("[INFO] Menunggu jeda acak awal (anti-bot)...")
+            await asyncio.sleep(random.uniform(1.5, 3.5))
+            
+            # Jangan gather barengan agar tidak terlalu agresif
+            results = []
+            for e_type in ['s', 'o']:
+                res = await self.fetch_type(client, e_type)
+                results.append(res)
+                if e_type == 's':
+                    await asyncio.sleep(random.uniform(2, 5))
             
             all_emiten = []
             for r in results:

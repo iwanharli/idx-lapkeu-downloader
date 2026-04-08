@@ -51,10 +51,16 @@ class IDXDownloader:
     EMITEN_LIST_PATH = "laporan_keuangan/list_emiten/emiten-code.json"
     
     HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-        "Referer": "https://www.idx.co.id/id/perusahaan-tercatat/laporan-keuangan-dan-tahunan",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
-        "X-Requested-With": "XMLHttpRequest"
+        "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Referer": "https://www.idx.co.id/id/perusahaan-tercatat/laporan-keuangan-dan-tahunan",
+        "X-Requested-With": "XMLHttpRequest",
+        "Sec-CH-UA": '"Chromium";v="123", "Not:A-Brand";v="8", "Google Chrome";v="123"',
+        "Sec-CH-UA-Mobile": "?0",
+        "Sec-CH-UA-Platform": '"Windows"',
+        "DNT": "1"
     }
 
     def __init__(self, save_dir="laporan_keuangan", concurrency_limit=5, on_progress=None):
@@ -271,7 +277,8 @@ class IDXDownloader:
         type_name = "saham" if emiten_type == "s" else "obligasi"
         type_label = type_name.upper()
         
-        async with httpx.AsyncClient(headers=self.HEADERS, follow_redirects=True, timeout=None) as client:
+        # Gunakan HTTP/2 agar lebih mirip browser asli
+        async with httpx.AsyncClient(headers=self.HEADERS, follow_redirects=True, timeout=None, http2=True) as client:
             emiten_to_process = []
             
             if from_json:
