@@ -16,15 +16,16 @@ python3 main.py
 - **Auto-Sync**: Daftar emiten diperbarui otomatis setiap dijalankan.
 - **Pembersih URL**: Menangani link rusak/double slash secara otomatis.
 - **Mode Akurat**: `--from-json` untuk memastikan nggak ada emiten terskip.
+- **Custom Output**: Mendukung penyimpanan ke NAS atau folder eksternal.
 
 ## 🛠 Penggunaan CLI
 
-| Perintah                                    | Fungsi                                     |
-| :------------------------------------------ | :----------------------------------------- |
-| `python3 main.py`                           | Jalankan secara interaktif (Tersedia menu) |
-| `python3 main.py --from-json`               | Mode Iterasi (Paling Aman & Akurat)        |
-| `python3 main.py --years 2024 --type saham` | Download spesifik                          |
-| `python3 main.py --no-update`               | Jalankan tanpa update daftar emiten        |
+| Perintah                                     | Fungsi                                     |
+| :------------------------------------------- | :----------------------------------------- |
+| `python3 main.py`                            | Jalankan secara interaktif (Tersedia menu) |
+| `python3 main.py --from-json`                | Mode Iterasi (Paling Aman & Akurat)        |
+| `python3 main.py --output /Volumes/DataNAS`  | Simpan langsung ke NAS atau folder lain    |
+| `python3 main.py --no-update`                | Jalankan tanpa update daftar emiten        |
 
 ## ⚠️ Penting
 

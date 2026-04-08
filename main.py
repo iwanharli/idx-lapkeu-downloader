@@ -281,6 +281,7 @@ async def main():
     parser.add_argument("--concurrency", type=int, default=5, help="Jumlah download paralel")
     parser.add_argument("--from-json", action="store_true", help="Ambil daftar kode emiten dari file JSON")
     parser.add_argument("--no-update", action="store_true", help="Lewati update daftar emiten otomatis")
+    parser.add_argument("--output", type=str, default="laporan_keuangan", help="Lokasi penyimpanan laporan (misal path ke NAS)")
     
     args = parser.parse_args()
     
@@ -288,7 +289,7 @@ async def main():
         fetcher = EmitenFetcher()
         await fetcher.fetch_all()
     
-    downloader = IDXDownloader(concurrency_limit=args.concurrency)
+    downloader = IDXDownloader(save_dir=args.output, concurrency_limit=args.concurrency)
     years_to_download = []
     asset_types = []
     
