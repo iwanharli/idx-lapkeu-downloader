@@ -96,13 +96,16 @@
 
                         <div>
                             <label class="text-xs text-slate-500 mb-1 block">Jenis Efek</label>
-                            <div class="grid grid-cols-2 gap-2">
+                            <div class="grid grid-cols-3 gap-2">
                                 <button @click="config.type = 'saham'" 
                                     :class="config.type === 'saham' ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400' : 'border-slate-700 text-slate-400'"
-                                    class="text-xs border rounded-lg py-2 font-medium transition-all">Saham</button>
+                                    class="text-[10px] border rounded-lg py-2 font-medium transition-all">Saham</button>
                                 <button @click="config.type = 'obligasi'" 
                                     :class="config.type === 'obligasi' ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400' : 'border-slate-700 text-slate-400'"
-                                    class="text-xs border rounded-lg py-2 font-medium transition-all">Obligasi</button>
+                                    class="text-[10px] border rounded-lg py-2 font-medium transition-all">Obligasi</button>
+                                <button @click="config.type = 'both'" 
+                                    :class="config.type === 'both' ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400' : 'border-slate-700 text-slate-400'"
+                                    class="text-[10px] border rounded-lg py-2 font-medium transition-all">Semua</button>
                             </div>
                         </div>
 
@@ -141,6 +144,17 @@
                             <span class="text-xs text-slate-500">Gagal</span>
                             <span class="text-lg font-bold text-rose-400" x-text="stats.failed">0</span>
                         </div>
+                    </div>
+                </div>
+
+                <div class="glass p-6">
+                    <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex justify-between items-center">
+                        Penyimpanan
+                        <button @click="fetchIssuers()" class="text-[8px] text-cyan-500 hover:text-white uppercase">Refresh</button>
+                    </h3>
+                    <div class="p-3 bg-slate-900/50 rounded-lg border border-slate-800 overflow-hidden">
+                        <div class="text-[10px] text-slate-500 uppercase font-bold mb-1">Path Saat Ini</div>
+                        <div class="text-[10px] font-mono text-cyan-400 break-all leading-relaxed" x-text="storagePath || 'Memuat...'">/loading...</div>
                     </div>
                 </div>
             </div>
@@ -361,6 +375,7 @@
                 },
 
                 // Downloads View State
+                storagePath: '',
                 issuers: [],
                 search: '',
                 selectedIssuer: null,
@@ -375,13 +390,25 @@
                 },
 
                 init() {
-                    this.connect();
+                    console.log("Dashboard initializing...");
+                    try {
+                        this.connect();
+                    } catch (e) {
+                        console.error("WS Connect error:", e);
+                    }
+                    
+                    // Delay API call slightly to ensure browser is ready
+                    setTimeout(() => {
+                        this.fetchIssuers();
+                    }, 500);
+                    
                     const saved = localStorage.getItem('idx_config');
                     if (saved) this.config = JSON.parse(saved);
 
                     this.$watch('config', value => {
                         localStorage.setItem('idx_config', JSON.stringify(value));
                     });
+                    console.log("Dashboard initialized logic triggered.");
                 },
 
                 connect() {
@@ -477,11 +504,15 @@
                 },
 
                 async fetchIssuers() {
+                    console.log("Fetching issuers and path...");
                     try {
                         const resp = await fetch('/api/issuers');
                         const data = await resp.json();
+                        console.log("API Response:", data);
                         this.issuers = data.issuers;
+                        this.storagePath = data.storage_path;
                     } catch (e) {
+                        console.error("Fetch issuers error:", e);
                         this.showAlert('error', 'Error', 'Gagal mengambil daftar emiten.');
                     }
                 },

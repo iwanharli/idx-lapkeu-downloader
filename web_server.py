@@ -71,9 +71,12 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.get("/api/issuers")
 async def get_issuers():
-    output_dir = Path(os.getenv("OUTPUT_DIR", "laporan_keuangan"))
+    output_path = os.getenv("OUTPUT_DIR", "laporan_keuangan")
+    output_dir = Path(output_path)
+    
+    storage_info = str(output_dir.absolute())
     if not output_dir.exists():
-        return {"issuers": []}
+        return {"issuers": [], "storage_path": f"{storage_info} (Folder belum dibuat)"}
     
     issuers = []
     # Structure: [type]/[year]/[code]
@@ -104,7 +107,10 @@ async def get_issuers():
     
     # Sort by code
     issuers.sort(key=lambda x: x["code"])
-    return {"issuers": issuers}
+    return {
+        "issuers": issuers, 
+        "storage_path": str(output_dir.absolute())
+    }
 
 @app.get("/api/files/{asset_type}/{year}/{code}")
 async def get_files(asset_type: str, year: str, code: str):
