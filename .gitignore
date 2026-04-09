@@ -12,7 +12,13 @@ build/
 *.spec
 .DS_Store
 
-# Enviroment & Logs
+# Environment & Logs
 .env
 .env.*
-failed.log
+logs/
+*.log
+
+# Data & Logs
+status_logs/
+metadata/
+laporan_keuangan/

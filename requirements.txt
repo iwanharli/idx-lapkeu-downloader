@@ -1,6 +1,6 @@
 requests
 tqdm
-httpx[http2]
+httpx
 aiofiles
 python-dotenv
 fastapi

@@ -8,8 +8,11 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 import uvicorn
-from main import IDXDownloader
 from dotenv import load_dotenv
+
+# Import from our new modular structure
+from src.downloader import IDXDownloader
+from src.config import DEFAULT_SAVE_DIR, STATUS_LOGS_DIR
 
 # Load environment variables
 load_dotenv()
@@ -71,7 +74,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.get("/api/settings")
 async def get_settings():
-    output_path = os.getenv("OUTPUT_DIR", "laporan_keuangan")
+    output_path = DEFAULT_SAVE_DIR
     output_dir = Path(output_path)
     storage_info = str(output_dir.absolute())
     return {
@@ -81,13 +84,27 @@ async def get_settings():
 
 @app.get("/api/issuers")
 async def get_issuers():
-    output_path = os.getenv("OUTPUT_DIR", "laporan_keuangan")
+    output_path = DEFAULT_SAVE_DIR
     output_dir = Path(output_path)
+    status_logs_dir = Path(STATUS_LOGS_DIR)
     
     storage_info = str(output_dir.absolute())
     if not output_dir.exists():
         return {"issuers": [], "storage_path": f"{storage_info} (Folder belum dibuat)"}
     
+    # Load all status logs into memory map for quick lookup
+    status_map = {}
+    if status_logs_dir.exists():
+        for log_file in status_logs_dir.glob("*.json"):
+            try:
+                with open(log_file, 'r') as f:
+                    data = json.load(f)
+                    year = data.get("metadata", {}).get("year")
+                    asset_type = data.get("metadata", {}).get("type")
+                    for code, info in data.get("issuers", {}).items():
+                        status_map[f"{asset_type}-{year}-{code}"] = info
+            except: continue
+
     issuers = []
     # Structure: [type]/[year]/[code]
     for asset_type in ["saham", "obligasi"]:
@@ -103,15 +120,23 @@ async def get_issuers():
                 if not code_dir.is_dir():
                     continue
                 
+                # Check status from log
+                issuer_key = f"{asset_type}-{year_dir.name}-{code_dir.name}"
+                log_info = status_map.get(issuer_key, {})
+                status = log_info.get("status", "unknown")
+                last_attempt = log_info.get("last_attempt", "-")
+                
                 # Check if it has files
                 files = list(code_dir.glob("*"))
-                if files:
+                if files or status != "unknown":
                     issuers.append({
-                        "id": f"{asset_type}-{year_dir.name}-{code_dir.name}",
+                        "id": issuer_key,
                         "code": code_dir.name,
                         "year": year_dir.name,
                         "type": asset_type,
                         "file_count": len(files),
+                        "status": status,
+                        "last_attempt": last_attempt,
                         "path": str(code_dir.absolute())
                     })
     
@@ -124,20 +149,36 @@ async def get_issuers():
 
 @app.get("/api/files/{asset_type}/{year}/{code}")
 async def get_files(asset_type: str, year: str, code: str):
-    output_dir = Path(os.getenv("OUTPUT_DIR", "laporan_keuangan"))
+    output_dir = Path(DEFAULT_SAVE_DIR)
     code_path = output_dir / asset_type / year / code
+    status_logs_dir = Path(STATUS_LOGS_DIR)
     
+    # Load URL data from status log if available
+    file_metadata_map = {}
+    log_file = status_logs_dir / f"{asset_type}_{year}_status.json"
+    if log_file.exists():
+        try:
+            with open(log_file, 'r') as f:
+                data = json.load(f)
+                issuer_data = data.get("issuers", {}).get(code, {})
+                for f_info in issuer_data.get("files", []):
+                    file_metadata_map[f_info["filename"]] = f_info
+        except: pass
+
     if not code_path.exists():
         raise HTTPException(status_code=404, detail="Folder emiten tidak ditemukan")
     
     files = []
     for f in code_path.iterdir():
-        if f.is_file() and not f.name.startswith("."):
+        if f.is_file() and not f.name.startswith(".") and f.name != "download_status.json":
             stats = f.stat()
+            meta = file_metadata_map.get(f.name, {})
             files.append({
                 "name": f.name,
                 "size": f"{stats.st_size / (1024*1024):.2f} MB",
-                "ext": f.suffix.replace(".", "").upper()
+                "ext": f.suffix.replace(".", "").upper(),
+                "url": meta.get("url", "-"),
+                "status": meta.get("status", "success")
             })
             
     return {"files": files}
@@ -161,13 +202,20 @@ async def start_download(request: Request):
         return {"status": "error", "message": "Download is already running"}
     
     data = await request.json()
-    year = int(data.get("year", 2024))
+    year_from = int(data.get("year_from", 2025))
+    year_to = int(data.get("year_to", 2025))
     asset_type = data.get("type", "saham")
+    retry_only = data.get("retry_only", False)
     limit = data.get("limit")
     if limit:
         limit = int(limit)
 
-    output_dir = os.getenv("OUTPUT_DIR", "laporan_keuangan")
+    # Pastikan urutan benar
+    start_year = min(year_from, year_to)
+    end_year = max(year_from, year_to)
+    years_to_process = list(range(start_year, end_year + 1))
+
+    output_dir = DEFAULT_SAVE_DIR
     concurrency = int(os.getenv("CONCURRENCY_LIMIT", 5))
 
     # Convert asset_type for downloader
@@ -186,10 +234,17 @@ async def start_download(request: Request):
                 on_progress=progress_callback
             )
             
-            for t in e_types:
-                await downloader.run(year=year, emiten_type=t, limit=limit, from_json=True)
+            for y in years_to_process:
+                for t in e_types:
+                    type_label = "SAHAM" if t == "s" else "OBLIGASI"
+                    await broadcast({
+                        "type": "status", 
+                        "message": f"--- MEMPROSES {type_label} TAHUN {y} {'(RETRY GAGAL SAJA)' if retry_only else ''} ---", 
+                        "mode": "info"
+                    })
+                    await downloader.run(year=y, emiten_type=t, limit=limit, from_json=True, retry_only=retry_only)
             
-            await broadcast({"type": "complete", "message": "Semua pengunduhan selesai!"})
+            await broadcast({"type": "complete", "message": "Semua pengunduhan dalam rentang tahun selesai!"})
         except Exception as e:
             await broadcast({"type": "error", "message": str(e)})
         finally:

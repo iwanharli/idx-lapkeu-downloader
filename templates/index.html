@@ -85,13 +85,23 @@
                     <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Konfigurasi</h3>
                     
                     <div class="space-y-4">
-                        <div>
-                            <label class="text-xs text-slate-500 mb-1 block">Tahun Laporan</label>
-                            <select x-model="config.year" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 outline-none">
-                                <template x-for="y in years">
-                                    <option :value="y" x-text="y"></option>
-                                </template>
-                            </select>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-xs text-slate-500 mb-1 block">Tahun Mulai</label>
+                                <select x-model="config.year_from" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 outline-none">
+                                    <template x-for="y in years">
+                                        <option :value="y" x-text="y" :selected="y == config.year_from"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-500 mb-1 block">Tahun Selesai</label>
+                                <select x-model="config.year_to" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 outline-none">
+                                    <template x-for="y in years">
+                                        <option :value="y" x-text="y" :selected="y == config.year_to"></option>
+                                    </template>
+                                </select>
+                            </div>
                         </div>
 
                         <div>
@@ -112,6 +122,19 @@
                         <div>
                             <label class="text-xs text-slate-500 mb-1 block">Limit Emiten (Opsional)</label>
                             <input type="number" x-model="config.limit" placeholder="Contoh: 10" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 outline-none">
+                        </div>
+
+                        <div class="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg border border-slate-800">
+                            <div>
+                                <div class="text-[10px] font-bold text-slate-300 uppercase">Retry Gagal Saja</div>
+                                <div class="text-[8px] text-slate-500">Lewati yang sudah Selesai</div>
+                            </div>
+                            <button @click="config.retry_only = !config.retry_only" 
+                                :class="config.retry_only ? 'bg-cyan-500' : 'bg-slate-700'"
+                                class="w-10 h-5 rounded-full relative transition-all duration-300">
+                                <span :class="config.retry_only ? 'translate-x-5' : 'translate-x-1'"
+                                    class="absolute top-1 left-0 w-3 h-3 bg-white rounded-full transition-all duration-300"></span>
+                            </button>
                         </div>
                     </div>
 
@@ -230,17 +253,17 @@
                     </div>
                     <div class="flex-1 overflow-y-auto p-4 space-y-1 font-mono text-[10px] md:text-xs" id="log-container">
                         <template x-for="(log, i) in logs" :key="i">
-                            <div class="flex gap-4">
-                                <span class="text-slate-600 shrink-0" x-text="log.time"></span>
-                                <span class="font-bold shrink-0" :class="{
+                            <div class="flex gap-4 items-start py-0.5 border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors">
+                                <span class="text-slate-600 shrink-0 font-mono w-16" x-text="log.time"></span>
+                                <span class="font-black shrink-0 w-20" :class="{
                                     'text-emerald-400': log.tag === 'SUCCESS',
                                     'text-cyan-400': log.tag === 'INFO',
                                     'text-rose-400': log.tag === 'FAILED' || log.tag === 'ERROR' || log.tag === 'NOT FOUND',
-                                    'text-amber-400': log.tag === 'RATE LIMIT' || log.tag === 'BACKOFF' | log.tag === 'SKIPPED',
+                                    'text-amber-400': log.tag === 'RATE LIMIT' || log.tag === 'BACKOFF' || log.tag === 'SKIPPED',
                                     'text-purple-400': log.tag === 'RECOVERY',
                                     'text-blue-400': log.tag === 'START'
                                 }" x-text="log.tag"></span>
-                                <span class="text-slate-300 break-all" x-text="log.message"></span>
+                                <span class="text-slate-300 break-all leading-relaxed" x-html="formatMessage(log.message)"></span>
                             </div>
                         </template>
                     </div>
@@ -268,7 +291,20 @@
                                     <div class="font-bold text-sm tracking-widest" x-text="issuer.code">---</div>
                                     <div class="text-[10px] opacity-60 font-medium" x-text="`${issuer.type.toUpperCase()} | ${issuer.year}`">---</div>
                                 </div>
-                                <div class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-500" x-text="issuer.file_count">0</div>
+                                 <div class="flex flex-col items-end gap-2">
+                                    <template x-if="issuer.status">
+                                        <span class="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-widest"
+                                            :class="{
+                                                'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30': issuer.status === 'completed',
+                                                'bg-amber-500/20 text-amber-400 border border-amber-500/30': issuer.status === 'partial_failed',
+                                                'bg-rose-500/20 text-rose-400 border border-rose-500/30': issuer.status === 'failed',
+                                                'bg-slate-500/20 text-slate-400 border border-slate-500/30': issuer.status === 'unknown' || !issuer.status,
+                                                'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 animate-pulse': issuer.status === 'downloading'
+                                            }"
+                                            x-text="issuer.status">---</span>
+                                    </template>
+                                    <div class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-500" x-text="issuer.file_count">0</div>
+                                </div>
                             </button>
                         </template>
                         <div x-show="filteredIssuers.length === 0" class="text-center py-10 text-slate-600 text-sm">
@@ -310,7 +346,17 @@
                                     </div>
                                     <div class="flex-1 min-w-0">
                                         <div class="text-sm font-bold text-slate-300 truncate" x-text="file.name">---</div>
-                                        <div class="text-xs text-slate-600 mt-1" x-text="file.size">0 MB</div>
+                                        <div class="flex items-center gap-4 mt-1">
+                                            <div class="text-[10px] text-slate-600 font-mono" x-text="file.size">0 MB</div>
+                                            <template x-if="file.url && file.url !== '-'">
+                                                <a :href="file.url" target="_blank" class="text-[10px] text-cyan-500/60 hover:text-cyan-400 truncate flex-1 decoration-dotted underline">Audit Source URL</a>
+                                            </template>
+                                        </div>
+                                    </div>
+                                    <div class="shrink-0">
+                                        <span class="text-[8px] px-1.5 py-0.5 rounded border font-bold uppercase"
+                                            :class="file.status === 'success' ? 'border-emerald-500/30 text-emerald-500/50' : 'border-rose-500/30 text-rose-500/50'"
+                                            x-text="file.status">---</span>
                                     </div>
                                 </div>
                             </template>
@@ -351,9 +397,11 @@
                 logs: [],
                 years: [2026, 2025, 2024, 2023, 2022, 2021, 2020],
                 config: {
-                    year: 2025,
+                    year_from: 2025,
+                    year_to: 2025,
                     type: 'saham',
-                    limit: ''
+                    limit: '',
+                    retry_only: false
                 },
                 progress: 0,
                 current: 0,
@@ -451,7 +499,7 @@
                         this.stats = data.stats;
                         
                         const tag = this.getStatusTag(data.status);
-                        this.addLog(tag, `${data.emiten}: ${data.status.toUpperCase()}`);
+                        this.addLog(tag, `| ${data.emiten} | ${data.status.toUpperCase()}`);
                     } else if (data.type === 'status') {
                         const tag = data.mode ? data.mode.toUpperCase() : 'INFO';
                         this.addLog(tag, data.message);
@@ -471,8 +519,11 @@
                 },
 
                 getStatusTag(status) {
-                    if (status === 'downloaded' || status === 'success') return 'SUCCESS';
-                    if (status === 'skipped') return 'SKIPPED';
+                    const s = status.toLowerCase();
+                    if (s === 'downloaded' || s === 'success' || s === 'completed') return 'SUCCESS';
+                    if (s === 'skipped') return 'SKIPPED';
+                    if (s === 'no_data' || s === 'no_files' || s === 'info') return 'INFO';
+                    if (s === 'partial_failed') return 'FAILED';
                     return 'FAILED';
                 },
 
@@ -569,6 +620,16 @@
                 showAlert(type, title, message) {
                     this.alert = { show: true, type, title, message };
                     setTimeout(() => this.alert.show = false, 5000);
+                },
+
+                formatMessage(msg) {
+                    if (msg.includes('|')) {
+                        const parts = msg.split('|');
+                        const code = parts[1].trim();
+                        const remain = parts.slice(2).join('|');
+                        return `<span class="bg-slate-800 text-cyan-400 px-1.5 py-0.5 rounded font-black text-[10px] mr-2">${code}</span> <span class="text-slate-400">${remain}</span>`;
+                    }
+                    return msg;
                 }
             }
         }
